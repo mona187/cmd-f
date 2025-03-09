@@ -1,6 +1,6 @@
-# Sign Language Translator
+# Sign Language Translator??????????????
 
-A real-time sign language translation application with video chat capabilities.
+A real-time sign language translation application with video chat capabilities.???????????/
 
 ## DevSecOps Features
 
