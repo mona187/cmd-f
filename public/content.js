@@ -1,5 +1,4 @@
 
-const API_KEY = 'AIzaSyBrVI_TAivVHZfvYfxZ5G1TGryrYVbvOGo'; // <--- Replace with your valid Cloud Translation API key
 
 // Language options with their display names
 const LANGUAGES = {
