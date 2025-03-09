@@ -3,11 +3,17 @@ const http = require('http');
 const { Server } = require('socket.io');
 const bodyParser = require('body-parser');
 const fetch = require('node-fetch'); // npm install node-fetch (for Node <18)
+const cors = require('cors');
 
 const app = express();
+app.use(cors());
+
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: '*' },
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
 });
 
 app.use(bodyParser.json());
@@ -59,74 +65,66 @@ app.post('/translate', async (req, res) => {
  *   ...
  * }
  */
-const rooms = {};
+const rooms = new Map();
 
 // ====== Socket.IO Signaling ======
 io.on('connection', (socket) => {
-  console.log('New client connected:', socket.id);
+  console.log('User connected:', socket.id);
 
-  // --- Join a room ---
   socket.on('join-room', (roomId) => {
-    // Create room if doesn't exist
-    if (!rooms[roomId]) {
-      rooms[roomId] = new Set();
+    // Leave previous room if any
+    const currentRoom = [...socket.rooms].find(room => room !== socket.id);
+    if (currentRoom) {
+      socket.leave(currentRoom);
     }
 
-    // Add this socket to the room
-    rooms[roomId].add(socket.id);
+    // Join new room
     socket.join(roomId);
+    
+    // Get all users in the room except the current user
+    const usersInRoom = Array.from(io.sockets.adapter.rooms.get(roomId) || [])
+      .filter(id => id !== socket.id);
 
-    console.log(`Socket ${socket.id} joined room ${roomId}`);
-
-    // 1) Tell existing members that a new user joined
+    // Notify others in the room
     socket.to(roomId).emit('user-joined', socket.id);
-
-    // 2) Send back a list of all other participants to the new user
-    const otherUsers = Array.from(rooms[roomId]).filter((id) => id !== socket.id);
-    io.to(socket.id).emit('all-users', otherUsers);
+    
+    // Store room information
+    rooms.set(socket.id, roomId);
   });
 
-  // --- WebRTC offers, answers, and ICE candidates ---
-  socket.on('offer', (payload) => {
-    console.log('Offer from:', payload.caller, 'to:', payload.target);
-    io.to(payload.target).emit('offer', {
-      sdp: payload.sdp,
-      caller: payload.caller,
+  socket.on('offer', ({ target, sdp }) => {
+    socket.to(target).emit('offer', {
+      sdp,
+      caller: socket.id
     });
   });
 
-  socket.on('answer', (payload) => {
-    console.log('Answer from:', socket.id, 'to:', payload.caller);
-    io.to(payload.caller).emit('answer', {
-      sdp: payload.sdp,
-      answerer: socket.id,
+  socket.on('answer', ({ caller, sdp }) => {
+    socket.to(caller).emit('answer', {
+      sdp,
+      answerer: socket.id
     });
   });
 
-  socket.on('ice-candidate', (incoming) => {
-    console.log('ICE candidate from:', socket.id, 'to:', incoming.target);
-    io.to(incoming.target).emit('ice-candidate', {
-      candidate: incoming.candidate,
-      from: socket.id,
+  socket.on('ice-candidate', ({ target, candidate }) => {
+    socket.to(target).emit('ice-candidate', {
+      candidate,
+      from: socket.id
     });
   });
 
-  // --- Handle user disconnecting ---
   socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-    // Remove from whichever room(s) the socket was in
-    for (let roomId in rooms) {
-      if (rooms[roomId].has(socket.id)) {
-        rooms[roomId].delete(socket.id);
-        // Notify other members in that room
-        socket.to(roomId).emit('user-left', socket.id);
-      }
+    const roomId = rooms.get(socket.id);
+    if (roomId) {
+      socket.to(roomId).emit('user-left', socket.id);
+      rooms.delete(socket.id);
     }
+    console.log('User disconnected:', socket.id);
   });
 });
 
 // ====== Start the Server ======
 const PORT = process.env.PORT || 5050;
 server.listen(PORT, () => {
-  console.log(`Signaling server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });

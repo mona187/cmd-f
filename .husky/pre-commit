@@ -1,0 +1,14 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Run linting
+npm run lint
+
+# Run tests
+npm test
+
+# Check for secrets
+npx gitleaks protect --staged
+
+# Run security audit
+npm audit 
