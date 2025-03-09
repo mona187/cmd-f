@@ -45,20 +45,7 @@ A real-time voice translation and sign language translation application with vid
 - Husky for git hooks
 - Lint-staged for incremental linting
 
-## Security Best Practices
-1. **Secret Management**:
-   - No hardcoded secrets
-   - Environment-based configuration
-   - Secret scanning in CI/CD
-
-2. **Code Security**:
-   - Regular dependency updates
-   - Security-focused linting rules
-   - Input validation
-   - XSS prevention
-   - CSRF protection
-
-3. **Infrastructure Security**:
+ **Infrastructure Security**:
    - HTTPS enforcement
    - Secure WebRTC configuration
    - Rate limiting
