@@ -6,42 +6,42 @@ import SimplePeer from 'simple-peer';
 const SIGNAL_SERVER_URL = 'http://localhost:5050'; // Adjust if your server is elsewhere
 
 function App() {
-  const [roomId, setRoomId] = useState('room1'); // Default room name
+  // WebRTC states
+  const [roomId, setRoomId] = useState('room1');
   const [myId, setMyId] = useState('');
   const [remoteId, setRemoteId] = useState('');
-
-  const socketRef = useRef(null);
-  const peerRef = useRef(null);
-
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
-
   const [localStream, setLocalStream] = useState(null);
   const [connected, setConnected] = useState(false);
 
+  const socketRef = useRef(null);
+  const peerRef = useRef(null);
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+
+  // Translator states (using basic ISO language codes)
+  const [sourceLang, setSourceLang] = useState('en'); // e.g., 'en'
+  const [targetLang, setTargetLang] = useState('fr'); // e.g., 'fr'
+  const [transcript, setTranscript] = useState('');
+  const [translation, setTranslation] = useState('');
+
   useEffect(() => {
-    // 1) Connect to the signaling server
     socketRef.current = io(SIGNAL_SERVER_URL);
 
-    // 2) When the server says "user-joined", we get the new user's ID
+    // Listen for new users joining
     socketRef.current.on('user-joined', (joinedUserId) => {
       console.log('New user joined:', joinedUserId);
       setRemoteId(joinedUserId);
     });
 
-    // 3) We might store our own ID
+    // Store our socket ID
     socketRef.current.on('connect', () => {
       setMyId(socketRef.current.id);
       console.log('Connected with ID:', socketRef.current.id);
     });
 
-    // 4) Listen for offers
+    // WebRTC signaling
     socketRef.current.on('offer', handleOffer);
-
-    // 5) Listen for answers
     socketRef.current.on('answer', handleAnswer);
-
-    // 6) Listen for ICE candidates
     socketRef.current.on('ice-candidate', handleIceCandidate);
 
     return () => {
@@ -49,22 +49,18 @@ function App() {
     };
   }, []);
 
-  // "Join Room" means telling the server we want to join a certain room ID
+  // Join room and get local media
   const joinRoom = async () => {
     try {
-      // Get local media
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
       });
       setLocalStream(stream);
-
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
         localVideoRef.current.play().catch(() => {});
       }
-
-      // Emit "join-room" to let server know which room we joined
       socketRef.current.emit('join-room', roomId);
       console.log('Joined room:', roomId);
     } catch (err) {
@@ -72,30 +68,34 @@ function App() {
     }
   };
 
-  // "Call Remote" starts the WebRTC offer
+  // Call remote peer
   const callRemote = () => {
     if (!localStream || !remoteId) {
       console.warn('No localStream or remoteId to call');
       return;
     }
 
-    // Create a SimplePeer in "initiator" mode
     const peer = new SimplePeer({
       initiator: true,
-      trickle: false,  // We'll handle ICE manually
+      trickle: false,
       stream: localStream,
     });
 
-    peer.on('signal', (sdp) => {
-      // If it's an offer, send "offer" to the server, specifying who we want to call
-      socketRef.current.emit('offer', {
-        target: remoteId,
-        caller: socketRef.current.id,
-        sdp,
-      });
+    peer.on('signal', (data) => {
+      if (data.sdp) {
+        socketRef.current.emit('offer', {
+          target: remoteId,
+          caller: socketRef.current.id,
+          sdp: data,
+        });
+      } else if (data.candidate) {
+        socketRef.current.emit('ice-candidate', {
+          candidate: data,
+          target: remoteId,
+        });
+      }
     });
 
-    // When the remote stream arrives, set it in a <video> element
     peer.on('stream', (remoteStream) => {
       if (remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = remoteStream;
@@ -103,38 +103,31 @@ function App() {
       }
     });
 
-    // If we generate ICE candidates, handle them
-    peer.on('iceCandidate', (candidate) => {
-      console.log('Local ICE candidate:', candidate);
-      if (candidate) {
-        socketRef.current.emit('ice-candidate', {
-          candidate,
-          target: remoteId,
-        });
-      }
-    });
-
     peerRef.current = peer;
     setConnected(true);
   };
 
-  // Handle an incoming offer
+  // Handle incoming offer
   const handleOffer = async ({ sdp, caller }) => {
     console.log('Received offer from:', caller);
-
-    // Create a SimplePeer in "initiator=false" mode
     const peer = new SimplePeer({
       initiator: false,
       trickle: false,
       stream: localStream,
     });
 
-    peer.on('signal', (answer) => {
-      // If it's an answer, send it back
-      socketRef.current.emit('answer', {
-        sdp: answer,
-        caller,
-      });
+    peer.on('signal', (data) => {
+      if (data.sdp) {
+        socketRef.current.emit('answer', {
+          sdp: data,
+          caller,
+        });
+      } else if (data.candidate) {
+        socketRef.current.emit('ice-candidate', {
+          candidate: data,
+          target: caller,
+        });
+      }
     });
 
     peer.on('stream', (remoteStream) => {
@@ -144,42 +137,82 @@ function App() {
       }
     });
 
-    peer.on('iceCandidate', (candidate) => {
-      if (candidate) {
-        socketRef.current.emit('ice-candidate', {
-          candidate,
-          target: caller,
-        });
-      }
-    });
-
-    // "Signal" the newly created peer with the offer
     peer.signal(sdp);
-
     peerRef.current = peer;
     setConnected(true);
   };
 
-  // Handle an incoming answer
+  // Handle incoming answer
   const handleAnswer = ({ sdp, answerer }) => {
     console.log('Received answer from:', answerer);
     peerRef.current?.signal(sdp);
   };
 
-  // Handle ICE candidate
+  // Handle ICE candidates
   const handleIceCandidate = ({ candidate, from }) => {
     console.log('Received ICE from:', from, candidate);
-    // Pass it to our current peer
     peerRef.current?.signal(candidate);
+  };
+
+  // Start speech recognition and call translation endpoint
+  const startRecognition = () => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Your browser does not support speech recognition.');
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = sourceLang;
+    recognition.interimResults = false;
+
+    recognition.onresult = async (event) => {
+      const result = event.results[0][0].transcript;
+      setTranscript(result);
+
+      // Call the server translation endpoint
+      const translated = await translateText(result, targetLang);
+      setTranslation(translated);
+      speakText(translated, targetLang);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+    };
+
+    recognition.start();
+  };
+
+  // Call the /translate endpoint for a real translation
+  const translateText = async (text, targetLanguage) => {
+    try {
+      const response = await fetch('/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, targetLanguage }),
+      });
+      const data = await response.json();
+      return data.translation;
+    } catch (err) {
+      console.error('Error translating text:', err);
+      return text;
+    }
+  };
+
+  // Speak the translated text using SpeechSynthesis
+  const speakText = (text, lang) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    window.speechSynthesis.speak(utterance);
   };
 
   return (
     <div style={{ padding: '1rem' }}>
-      <h1>2-Person WebRTC Demo</h1>
-      <p>Your ID: {myId}</p>
+      <h1>2-Person WebRTC Demo with Real Translation</h1>
+      <p>Your Socket ID: {myId}</p>
 
       <div style={{ marginBottom: '1rem' }}>
-        <label>Room ID:</label>
+        <label>Room ID: </label>
         <input
           value={roomId}
           onChange={(e) => setRoomId(e.target.value)}
@@ -187,12 +220,10 @@ function App() {
         <button onClick={joinRoom}>Join Room</button>
       </div>
 
-      <p>
-        If another user joins the same room, you'll see their ID appear in your console or in <code>remoteId</code> (we store it if you want).
-      </p>
+      <p>When another user joins the same room, their Socket ID will appear.</p>
 
       <div style={{ marginBottom: '1rem' }}>
-        <label>Remote ID to call:</label>
+        <label>Remote Socket ID to call: </label>
         <input
           value={remoteId}
           onChange={(e) => setRemoteId(e.target.value)}
@@ -220,6 +251,39 @@ function App() {
             autoPlay
           />
         </div>
+      </div>
+
+      <hr style={{ margin: '2rem 0' }} />
+
+      <h2>Translator</h2>
+      <div>
+        <label>Source Language: </label>
+        <select value={sourceLang} onChange={(e) => setSourceLang(e.target.value)}>
+          <option value="en">English</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          {/* Add more options as needed */}
+        </select>
+      </div>
+      <div>
+        <label>Target Language: </label>
+        <select value={targetLang} onChange={(e) => setTargetLang(e.target.value)}>
+          <option value="fr">French</option>
+          <option value="en">English</option>
+          <option value="es">Spanish</option>
+          {/* Add more options as needed */}
+        </select>
+      </div>
+      <div style={{ marginTop: '1rem' }}>
+        <button onClick={startRecognition}>Start Translation</button>
+      </div>
+      <div style={{ marginTop: '1rem' }}>
+        <h3>Transcript:</h3>
+        <p>{transcript}</p>
+      </div>
+      <div style={{ marginTop: '1rem' }}>
+        <h3>Translation:</h3>
+        <p>{translation}</p>
       </div>
     </div>
   );
