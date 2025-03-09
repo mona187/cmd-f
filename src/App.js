@@ -125,6 +125,10 @@ function App() {
   const [isSpeechRecognitionActive, setIsSpeechRecognitionActive] = useState(false);
   const recognitionRef = useRef(null);
 
+  // Add voice loading effect
+  const [selectedVoice, setSelectedVoice] = useState('');
+  const [availableVoices, setAvailableVoices] = useState([]);
+
   useEffect(() => {
     // Connect to the signaling server
     socketRef.current = io(SIGNAL_SERVER_URL);
@@ -379,23 +383,136 @@ function App() {
     }
   };
 
-  // Use the browser's built-in speechSynthesis with better configuration
+  // Update voice loading effect
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      
+      // Filter for reliable voices only
+      const filteredVoices = voices
+        .filter(voice => {
+          // Only include voices that:
+          // 1. Are English voices
+          // 2. Have a valid name
+          // 3. Are from reliable sources or known fun voices
+          return (
+            voice.lang.startsWith('en') &&
+            voice.name &&
+            (
+              voice.name.includes('Google') ||
+              voice.name.includes('Microsoft') ||
+              voice.name.includes('Samantha') ||
+              voice.name.includes('Alex') ||
+              voice.name.includes('Victoria') ||
+              voice.name.includes('Daniel') ||
+              voice.name.includes('Junior') ||
+              voice.name.includes('Fred') ||
+              voice.name.includes('Rishi') ||
+              voice.name.includes('Junior') ||
+              voice.name.includes('Junior') ||
+              voice.name.includes('Junior')
+            )
+          );
+        })
+        .sort((a, b) => {
+          // Sort by source first (Google voices first)
+          if (a.name.includes('Google') && !b.name.includes('Google')) return -1;
+          if (!a.name.includes('Google') && b.name.includes('Google')) return 1;
+          // Then by gender (female voices first)
+          if (a.name.includes('Female') && !b.name.includes('Female')) return -1;
+          if (!a.name.includes('Female') && b.name.includes('Female')) return 1;
+          // Then by name
+          return a.name.localeCompare(b.name);
+        });
+      
+      console.log('Available voices:', filteredVoices);
+      setAvailableVoices(filteredVoices);
+      
+      // Set default voice to first available voice
+      if (filteredVoices.length > 0 && !selectedVoice) {
+        setSelectedVoice(filteredVoices[0].name);
+      }
+    };
+
+    // Load voices when they're ready
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+    loadVoices();
+  }, []);
+
+  // Update voice preview function with fun message
+  const previewVoice = (voiceName) => {
+    const voice = availableVoices.find(v => v.name === voiceName);
+    if (voice) {
+      try {
+        // Cancel any ongoing speech
+        window.speechSynthesis.cancel();
+        
+        // Fun preview messages based on voice characteristics
+        let previewMessage = "Hello! I'm a fun voice assistant!";
+        if (voice.name.includes('Junior')) {
+          previewMessage = "Hey there! I'm a cool kid voice!";
+        } else if (voice.name.includes('Fred')) {
+          previewMessage = "Hi! I'm Fred, and I love to chat!";
+        } else if (voice.name.includes('Rishi')) {
+          previewMessage = "Namaste! I'm here to help you!";
+        }
+        
+        const utterance = new SpeechSynthesisUtterance(previewMessage);
+        utterance.voice = voice;
+        utterance.rate = 0.9;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        
+        // Add error handling
+        utterance.onerror = (event) => {
+          console.error('Voice preview error:', event);
+          window.speechSynthesis.cancel();
+        };
+        
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.error('Error previewing voice:', err);
+      }
+    }
+  };
+
+  // Update speakText function with better error handling
   const speakText = (text, lang) => {
     if (!text) return;
     
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
+    try {
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
-    utterance.rate = 1.2; // Slightly faster speech
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang;
+      utterance.rate = 0.9; // Slower rate for main speech
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
 
-    // Add a small delay to prevent rapid-fire speech
-    setTimeout(() => {
-      window.speechSynthesis.speak(utterance);
-    }, 100);
+      // Set voice if available
+      if (selectedVoice && availableVoices.length > 0) {
+        const voice = availableVoices.find(v => v.name === selectedVoice);
+        if (voice) {
+          utterance.voice = voice;
+        }
+      }
+
+      // Add error handling
+      utterance.onerror = (event) => {
+        console.error('Speech error:', event);
+        window.speechSynthesis.cancel();
+      };
+
+      // Add a small delay to prevent rapid-fire speech
+      setTimeout(() => {
+        window.speechSynthesis.speak(utterance);
+      }, 100);
+    } catch (err) {
+      console.error('Error in speakText:', err);
+    }
   };
 
   // Load the handpose model
@@ -954,6 +1071,42 @@ function App() {
               <KawaiiGhost style={{ width: '24px', height: '24px' }} />
               {isSpeechRecognitionActive ? 'Stop Speech' : 'Start Speech'}
             </button>
+
+            {/* Voice Selection */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              background: 'white',
+              padding: '0.5rem 1rem',
+              borderRadius: '12px',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)'
+            }}>
+              <KawaiiGhost style={{ width: '24px', height: '24px' }} />
+              <select
+                value={selectedVoice}
+                onChange={(e) => {
+                  setSelectedVoice(e.target.value);
+                  previewVoice(e.target.value);
+                }}
+                style={{
+                  padding: '0.5rem',
+                  borderRadius: '8px',
+                  border: '2px solid #e2e8f0',
+                  outline: 'none',
+                  fontSize: '0.875rem',
+                  backgroundColor: 'white',
+                  cursor: 'pointer',
+                  minWidth: '200px'
+                }}
+              >
+                {availableVoices.map(voice => (
+                  <option key={voice.name} value={voice.name}>
+                    {voice.name} ({voice.lang})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
