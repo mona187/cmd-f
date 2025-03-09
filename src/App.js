@@ -288,6 +288,7 @@ function App() {
           <option value="fr">French</option>
           <option value="de">German</option>
           <option value="zh">Chinese</option>
+          <option value="fa">Farsi</option>
         </select>
       </div>
 
@@ -298,10 +299,12 @@ function App() {
           onChange={(e) => setTargetLang(e.target.value)}
         >
           <option value="en">English</option>
+          <option value="ar">Arabic</option>
           <option value="es">Spanish</option>
           <option value="fr">French</option>
           <option value="de">German</option>
           <option value="zh">Chinese</option>
+          <option value="fa-IR">Farsi</option>
         </select>
       </div>
 

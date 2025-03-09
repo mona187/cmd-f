@@ -2,8 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const bodyParser = require('body-parser');
-// For Node <18, install node-fetch with: npm install node-fetch
-const fetch = require('node-fetch');
+const fetch = require('node-fetch'); // npm install node-fetch (for Node <18)
 
 const app = express();
 const server = http.createServer(app);
@@ -13,9 +12,11 @@ const io = new Server(server, {
 
 app.use(bodyParser.json());
 
-// Translation endpoint using Google Cloud Translation API
+// ====== Google Cloud Translation Endpoint (Optional) ======
+//  - If you have a Google Cloud Translate API key, you can enable this endpoint.
+//  - Otherwise, you can rely on the client-side MyMemory example, or remove this endpoint altogether.
 app.post('/translate', async (req, res) => {
-  const { text, targetLanguage } = req.body;
+  const { text, targetLanguage, sourceLanguage } = req.body;
   try {
     const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY;
     if (!apiKey) {
@@ -27,8 +28,8 @@ app.post('/translate', async (req, res) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         q: text,
-        source: 'en', // Assumes source is English; adjust as needed or pass from client
-        target: targetLanguage,
+        source: sourceLanguage || 'en',
+        target: targetLanguage || 'en',
         format: 'text',
       }),
     });
@@ -51,16 +52,41 @@ app.post('/translate', async (req, res) => {
   }
 });
 
-// WebRTC signaling events
+// ====== Data Structures to Track Rooms & Participants ======
+/**
+ * rooms = {
+ *   [roomId]: Set of socketIds,
+ *   ...
+ * }
+ */
+const rooms = {};
+
+// ====== Socket.IO Signaling ======
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
 
+  // --- Join a room ---
   socket.on('join-room', (roomId) => {
+    // Create room if doesn't exist
+    if (!rooms[roomId]) {
+      rooms[roomId] = new Set();
+    }
+
+    // Add this socket to the room
+    rooms[roomId].add(socket.id);
     socket.join(roomId);
+
     console.log(`Socket ${socket.id} joined room ${roomId}`);
+
+    // 1) Tell existing members that a new user joined
     socket.to(roomId).emit('user-joined', socket.id);
+
+    // 2) Send back a list of all other participants to the new user
+    const otherUsers = Array.from(rooms[roomId]).filter((id) => id !== socket.id);
+    io.to(socket.id).emit('all-users', otherUsers);
   });
 
+  // --- WebRTC offers, answers, and ICE candidates ---
   socket.on('offer', (payload) => {
     console.log('Offer from:', payload.caller, 'to:', payload.target);
     io.to(payload.target).emit('offer', {
@@ -85,11 +111,21 @@ io.on('connection', (socket) => {
     });
   });
 
+  // --- Handle user disconnecting ---
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
+    // Remove from whichever room(s) the socket was in
+    for (let roomId in rooms) {
+      if (rooms[roomId].has(socket.id)) {
+        rooms[roomId].delete(socket.id);
+        // Notify other members in that room
+        socket.to(roomId).emit('user-left', socket.id);
+      }
+    }
   });
 });
 
+// ====== Start the Server ======
 const PORT = process.env.PORT || 5050;
 server.listen(PORT, () => {
   console.log(`Signaling server running on port ${PORT}`);
