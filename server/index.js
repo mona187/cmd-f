@@ -2,65 +2,57 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const cors = require('cors');
-
-// For Node <18, install node-fetch: npm install node-fetch
-// Then uncomment this line:
+const bodyParser = require('body-parser');
+// For Node <18, install node-fetch with: npm install node-fetch
 const fetch = require('node-fetch');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: '*', // Allow all origins for dev
-  },
+  cors: { origin: '*' },
 });
 
-// Parse incoming JSON bodies
-app.use(express.json());
-// If needed, you can also do:
-// app.use(cors());
+app.use(bodyParser.json());
 
-/**
- * POST /translate
- * Expects JSON body: { text, sourceLanguage, targetLanguage }
- * Calls LibreTranslate and responds with { translation: "..."}
- */
+// Translation endpoint using Google Cloud Translation API
 app.post('/translate', async (req, res) => {
-  const { text, sourceLanguage, targetLanguage } = req.body;
-
+  const { text, targetLanguage } = req.body;
   try {
-    const response = await fetch('https://libretranslate.com/translate', {
+    const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY;
+    if (!apiKey) {
+      throw new Error('Missing GOOGLE_TRANSLATE_API_KEY environment variable');
+    }
+    const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         q: text,
-        source: sourceLanguage || 'en', // fallback if not provided
-        target: targetLanguage || 'en', // fallback if not provided
+        source: 'en', // Assumes source is English; adjust as needed or pass from client
+        target: targetLanguage,
         format: 'text',
       }),
     });
-
     const data = await response.json();
-    console.log('Translation API response:', data);
-
-    // LibreTranslate returns { translatedText: "..." } on success
-    if (data && data.translatedText) {
-      res.json({ translation: data.translatedText });
+    console.log('Google Translate API response:', data);
+    if (
+      data &&
+      data.data &&
+      data.data.translations &&
+      data.data.translations.length > 0
+    ) {
+      res.json({ translation: data.data.translations[0].translatedText });
     } else {
-      // If something unexpected, return original text
-      console.warn('Unexpected LibreTranslate response:', data);
+      console.log('Unexpected response from Google API:', data);
       res.json({ translation: text });
     }
-
   } catch (err) {
     console.error('Translation error:', err);
-    // Return original text on error
     res.status(500).json({ translation: text });
   }
 });
 
-// WebRTC signaling
+// WebRTC signaling events
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
 
@@ -74,7 +66,7 @@ io.on('connection', (socket) => {
     console.log('Offer from:', payload.caller, 'to:', payload.target);
     io.to(payload.target).emit('offer', {
       sdp: payload.sdp,
-      caller: payload.caller
+      caller: payload.caller,
     });
   });
 
@@ -82,7 +74,7 @@ io.on('connection', (socket) => {
     console.log('Answer from:', socket.id, 'to:', payload.caller);
     io.to(payload.caller).emit('answer', {
       sdp: payload.sdp,
-      answerer: socket.id
+      answerer: socket.id,
     });
   });
 
@@ -90,7 +82,7 @@ io.on('connection', (socket) => {
     console.log('ICE candidate from:', socket.id, 'to:', incoming.target);
     io.to(incoming.target).emit('ice-candidate', {
       candidate: incoming.candidate,
-      from: socket.id
+      from: socket.id,
     });
   });
 

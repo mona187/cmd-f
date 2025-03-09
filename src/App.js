@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import io from 'socket.io-client';
 import SimplePeer from 'simple-peer';
 
-const SIGNAL_SERVER_URL = 'http://localhost:5050'; // Adjust if your server is elsewhere
+const SIGNAL_SERVER_URL = 'http://localhost:5050';
 
 function App() {
   // WebRTC states
@@ -18,7 +18,7 @@ function App() {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
 
-  // Translator states (using basic ISO language codes)
+  // Translator states (using ISO language codes)
   const [sourceLang, setSourceLang] = useState('en'); // e.g., 'en'
   const [targetLang, setTargetLang] = useState('fr'); // e.g., 'fr'
   const [transcript, setTranscript] = useState('');
@@ -27,19 +27,16 @@ function App() {
   useEffect(() => {
     socketRef.current = io(SIGNAL_SERVER_URL);
 
-    // Listen for new users joining
     socketRef.current.on('user-joined', (joinedUserId) => {
       console.log('New user joined:', joinedUserId);
       setRemoteId(joinedUserId);
     });
 
-    // Store our socket ID
     socketRef.current.on('connect', () => {
       setMyId(socketRef.current.id);
       console.log('Connected with ID:', socketRef.current.id);
     });
 
-    // WebRTC signaling
     socketRef.current.on('offer', handleOffer);
     socketRef.current.on('answer', handleAnswer);
     socketRef.current.on('ice-candidate', handleIceCandidate);
@@ -49,7 +46,6 @@ function App() {
     };
   }, []);
 
-  // Join room and get local media
   const joinRoom = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -68,7 +64,6 @@ function App() {
     }
   };
 
-  // Call remote peer
   const callRemote = () => {
     if (!localStream || !remoteId) {
       console.warn('No localStream or remoteId to call');
@@ -107,7 +102,6 @@ function App() {
     setConnected(true);
   };
 
-  // Handle incoming offer
   const handleOffer = async ({ sdp, caller }) => {
     console.log('Received offer from:', caller);
     const peer = new SimplePeer({
@@ -142,19 +136,16 @@ function App() {
     setConnected(true);
   };
 
-  // Handle incoming answer
   const handleAnswer = ({ sdp, answerer }) => {
     console.log('Received answer from:', answerer);
     peerRef.current?.signal(sdp);
   };
 
-  // Handle ICE candidates
   const handleIceCandidate = ({ candidate, from }) => {
     console.log('Received ICE from:', from, candidate);
     peerRef.current?.signal(candidate);
   };
 
-  // Start speech recognition and call translation endpoint
   const startRecognition = () => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -170,7 +161,7 @@ function App() {
       const result = event.results[0][0].transcript;
       setTranscript(result);
 
-      // Call the server translation endpoint
+      // Call the translation endpoint
       const translated = await translateText(result, targetLang);
       setTranslation(translated);
       speakText(translated, targetLang);
@@ -183,7 +174,7 @@ function App() {
     recognition.start();
   };
 
-  // Call the /translate endpoint for a real translation
+  // Call the /translate endpoint for a real translation using Google Translate API
   const translateText = async (text, targetLanguage) => {
     try {
       const response = await fetch('/translate', {
@@ -192,6 +183,7 @@ function App() {
         body: JSON.stringify({ text, targetLanguage }),
       });
       const data = await response.json();
+      console.log('Translation API response:', data);
       return data.translation;
     } catch (err) {
       console.error('Error translating text:', err);
@@ -199,7 +191,6 @@ function App() {
     }
   };
 
-  // Speak the translated text using SpeechSynthesis
   const speakText = (text, lang) => {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang;
@@ -208,7 +199,7 @@ function App() {
 
   return (
     <div style={{ padding: '1rem' }}>
-      <h1>2-Person WebRTC Demo with Real Translation</h1>
+      <h1>2-Person WebRTC Demo with Google Translation</h1>
       <p>Your Socket ID: {myId}</p>
 
       <div style={{ marginBottom: '1rem' }}>
