@@ -1,6 +1,7 @@
-# Sign Language Translator??????????????
+# Global Bridge
 
-A real-time sign language translation application with video chat capabilities.???????????/
+A real-time voice translation and sign language translation application with video chat capabilities that helps connect with people worldwide.
+
 
 ## DevSecOps Features
 
