@@ -6,6 +6,10 @@ import SimplePeer from 'simple-peer';
 import io from 'socket.io-client';
 import SignLanguageRecognition from './components/SignLanguageRecognition';
 
+import ReactDOM from 'react-dom';
+
+
+
 // Update with your actual signaling server endpoint
 const SIGNAL_SERVER_URL = process.env.REACT_APP_SIGNAL_SERVER_URL || 'http://localhost:5050';
 
