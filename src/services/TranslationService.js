@@ -184,18 +184,26 @@ class TranslationService {
   // Add support for more languages
   getSupportedLanguages() {
     return [
-      { code: 'en', name: 'English' },
+      { code: 'zh', name: 'Chinese (Simplified)' },
       { code: 'es', name: 'Spanish' },
-      { code: 'fr', name: 'French' },
-      { code: 'de', name: 'German' },
-      { code: 'it', name: 'Italian' },
+      { code: 'en', name: 'English' },
+      { code: 'hi', name: 'Hindi' },
+      { code: 'ar', name: 'Arabic' },
+      { code: 'bn', name: 'Bengali' },
       { code: 'pt', name: 'Portuguese' },
       { code: 'ru', name: 'Russian' },
       { code: 'ja', name: 'Japanese' },
+      { code: 'fa', name: 'Persian' },
+      { code: 'de', name: 'German' },
       { code: 'ko', name: 'Korean' },
-      { code: 'zh', name: 'Chinese (Simplified)' },
-      { code: 'ar', name: 'Arabic' },
-      { code: 'hi', name: 'Hindi' }
+      { code: 'fr', name: 'French' },
+      { code: 'tr', name: 'Turkish' },
+      { code: 'vi', name: 'Vietnamese' },
+      { code: 'it', name: 'Italian' },
+      { code: 'th', name: 'Thai' },
+      { code: 'nl', name: 'Dutch' },
+      { code: 'pl', name: 'Polish' },
+      { code: 'uk', name: 'Ukrainian' }
     ];
   }
 }

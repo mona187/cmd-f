@@ -6,7 +6,6 @@ import SimplePeer from 'simple-peer';
 import io from 'socket.io-client';
 import SignLanguageRecognition from './components/SignLanguageRecognition';
 
-import ReactDOM from 'react-dom';
 
 
 
@@ -74,6 +73,30 @@ const KawaiiGhost = ({ style, emotion = 'happy' }) => (
     </svg>
   </div>
 );
+
+// Update language options constant with flag emojis
+const LANGUAGE_OPTIONS = [
+  { code: 'zh', name: 'Chinese (Simplified)', flag: '🇨🇳' },
+  { code: 'es', name: 'Spanish', flag: '🇪🇸' },
+  { code: 'en', name: 'English', flag: '🇬🇧' },
+  { code: 'hi', name: 'Hindi', flag: '🇮🇳' },
+  { code: 'ar', name: 'Arabic', flag: '🇸🇦' },
+  { code: 'bn', name: 'Bengali', flag: '🇧🇩' },
+  { code: 'pt', name: 'Portuguese', flag: '🇵🇹' },
+  { code: 'ru', name: 'Russian', flag: '🇷🇺' },
+  { code: 'ja', name: 'Japanese', flag: '🇯🇵' },
+  { code: 'fa', name: 'Persian', flag: '🇮🇷' },
+  { code: 'de', name: 'German', flag: '🇩🇪' },
+  { code: 'ko', name: 'Korean', flag: '🇰🇷' },
+  { code: 'fr', name: 'French', flag: '🇫🇷' },
+  { code: 'tr', name: 'Turkish', flag: '🇹🇷' },
+  { code: 'vi', name: 'Vietnamese', flag: '🇻🇳' },
+  { code: 'it', name: 'Italian', flag: '🇮🇹' },
+  { code: 'th', name: 'Thai', flag: '🇹🇭' },
+  { code: 'nl', name: 'Dutch', flag: '🇳🇱' },
+  { code: 'pl', name: 'Polish', flag: '🇵🇱' },
+  { code: 'uk', name: 'Ukrainian', flag: '🇺🇦' }
+];
 
 function App() {
   // --- WebRTC / Video Chat state ---
@@ -994,11 +1017,11 @@ function App() {
                     fontSize: '0.875rem'
                   }}
                 >
-                  <option value="en">From: English</option>
-                  <option value="es">From: Spanish</option>
-                  <option value="fr">From: French</option>
-                  <option value="de">From: German</option>
-                  <option value="zh">From: Chinese</option>
+                  {LANGUAGE_OPTIONS.map(lang => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.flag} From: {lang.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -1024,11 +1047,11 @@ function App() {
                     fontSize: '0.875rem'
                   }}
                 >
-                  <option value="en">To: English</option>
-                  <option value="es">To: Spanish</option>
-                  <option value="fr">To: French</option>
-                  <option value="de">To: German</option>
-                  <option value="zh">To: Chinese</option>
+                  {LANGUAGE_OPTIONS.map(lang => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.flag} To: {lang.name}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

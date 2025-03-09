@@ -1,7 +1,58 @@
 import '@mediapipe/hands';
 import * as handpose from '@tensorflow-models/handpose';
 import * as tf from '@tensorflow/tfjs';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
+
+// Throttle function to limit detection frequency
+const throttle = (fn, delay) => {
+  let lastCall = 0;
+  return (...args) => {
+    const now = Date.now();
+    if (now - lastCall >= delay) {
+      lastCall = now;
+      fn(...args);
+    }
+  };
+};
+
+// Gesture history to track recent detections
+const GESTURE_HISTORY_SIZE = 5;
+const GESTURE_HISTORY = {
+  signs: [],
+  timestamps: [],
+  add(sign, timestamp) {
+    this.signs.push(sign);
+    this.timestamps.push(timestamp);
+    if (this.signs.length > GESTURE_HISTORY_SIZE) {
+      this.signs.shift();
+      this.timestamps.shift();
+    }
+  },
+  clear() {
+    this.signs = [];
+    this.timestamps = [];
+  },
+  getMostFrequentSign() {
+    if (this.signs.length === 0) return null;
+    
+    const signCounts = {};
+    this.signs.forEach(sign => {
+      signCounts[sign] = (signCounts[sign] || 0) + 1;
+    });
+    
+    let maxCount = 0;
+    let mostFrequentSign = null;
+    
+    Object.entries(signCounts).forEach(([sign, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        mostFrequentSign = sign;
+      }
+    });
+    
+    return mostFrequentSign;
+  }
+};
 
 const SignLanguageRecognition = ({ 
   videoRef, 
@@ -9,12 +60,20 @@ const SignLanguageRecognition = ({
   targetLang,
   isActive,
   onActiveChange,
-  KawaiiGhost
+  KawaiiGhost = null
 }) => {
   const canvasRef = useRef(null);
   const handposeModelRef = useRef(null);
   const requestAnimationFrameRef = useRef(null);
-  const [isModelLoaded, setIsModelLoaded] = useState(false);
+  const lastDetectedSignRef = useRef('');
+  const lastDetectionTimeRef = useRef(0);
+  const detectionCountRef = useRef(0);
+  const MIN_DETECTION_INTERVAL = 1500;
+  const MIN_DETECTION_COUNT = 4;
+  const DETECTION_THRESHOLD = 60;
+  const HORIZONTAL_THRESHOLD = 120;
+  const DETECTION_FPS = 10;
+  const DETECTION_INTERVAL = 1000 / DETECTION_FPS;
 
   // Load the handpose model
   useEffect(() => {
@@ -35,7 +94,6 @@ const SignLanguageRecognition = ({
         });
         
         handposeModelRef.current = model;
-        setIsModelLoaded(true);
         console.log('Handpose model loaded successfully!');
       } catch (err) {
         console.error('Failed to load handpose model:', err);
@@ -56,7 +114,7 @@ const SignLanguageRecognition = ({
   }, []);
 
   // Function to draw hand landmarks on canvas
-  const drawHand = (predictions, ctx) => {
+  const drawHand = useCallback((predictions, ctx) => {
     if (!predictions.length) return;
 
     predictions.forEach(prediction => {
@@ -89,10 +147,10 @@ const SignLanguageRecognition = ({
         ctx.stroke();
       });
     });
-  };
+  }, []);
 
-  // Function to interpret hand gestures
-  const interpretHandGesture = (landmarks) => {
+  // Function to interpret hand gestures with improved thresholds
+  const interpretHandGesture = useCallback((landmarks) => {
     const palmBase = landmarks[0];
     const thumbTip = landmarks[4];
     const indexTip = landmarks[8];
@@ -103,7 +161,7 @@ const SignLanguageRecognition = ({
     const isFingerUp = (fingerTip) => {
       const verticalDiff = palmBase[1] - fingerTip[1];
       const horizontalDiff = Math.abs(palmBase[0] - fingerTip[0]);
-      return verticalDiff > 40 && horizontalDiff < 100;
+      return verticalDiff > DETECTION_THRESHOLD && horizontalDiff < HORIZONTAL_THRESHOLD;
     };
 
     const isThumbUp = isFingerUp(thumbTip);
@@ -120,21 +178,24 @@ const SignLanguageRecognition = ({
     if (!isThumbUp && !isIndexUp && !isMiddleUp && !isRingUp && isPinkyUp) return "Rock";
 
     return "";
-  };
+  }, [DETECTION_THRESHOLD, HORIZONTAL_THRESHOLD]);
 
-  // Function to detect hand signs
-  const detectHandSigns = async (video) => {
+  // Function to detect hand signs with throttling and state management
+  const detectHandSigns = useCallback(async (video) => {
     if (!handposeModelRef.current || !video) return;
 
     try {
       const canvas = canvasRef.current;
-      canvas.width = video.videoWidth || 320;
-      canvas.height = video.videoHeight || 240;
+      const inferenceWidth = 320;
+      const inferenceHeight = 240;
+      canvas.width = inferenceWidth;
+      canvas.height = inferenceHeight;
       const ctx = canvas.getContext('2d');
       
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      const predictions = await handposeModelRef.current.estimateHands(video, {
+      const predictions = await handposeModelRef.current.estimateHands(canvas, {
         flipHorizontal: true
       });
       
@@ -143,20 +204,58 @@ const SignLanguageRecognition = ({
         const landmarks = predictions[0].landmarks;
         const sign = interpretHandGesture(landmarks);
         
+        const currentTime = Date.now();
+        
         if (sign) {
-          onSignDetected(sign);
+          if (currentTime - lastDetectionTimeRef.current >= MIN_DETECTION_INTERVAL) {
+            if (sign === lastDetectedSignRef.current) {
+              detectionCountRef.current++;
+              console.log(`Detection count for ${sign}: ${detectionCountRef.current}`);
+              
+              if (detectionCountRef.current >= MIN_DETECTION_COUNT) {
+                console.log(`Sign detected: ${sign}`);
+                onSignDetected(sign);
+                lastDetectionTimeRef.current = currentTime;
+                detectionCountRef.current = 0;
+              }
+            } else {
+              console.log(`New sign detected: ${sign}`);
+              detectionCountRef.current = 1;
+              lastDetectedSignRef.current = sign;
+            }
+          }
+        } else {
+          if (lastDetectedSignRef.current) {
+            console.log('No sign detected, resetting counters');
+            detectionCountRef.current = 0;
+            lastDetectedSignRef.current = '';
+          }
         }
-      }
-
-      if (isActive) {
-        requestAnimationFrameRef.current = requestAnimationFrame(() => 
-          detectHandSigns(video)
-        );
+      } else {
+        if (lastDetectedSignRef.current) {
+          console.log('No hand detected, resetting counters');
+          detectionCountRef.current = 0;
+          lastDetectedSignRef.current = '';
+        }
       }
     } catch (err) {
       console.error('Hand detection error:', err);
     }
-  };
+  }, [drawHand, interpretHandGesture, MIN_DETECTION_INTERVAL, MIN_DETECTION_COUNT, onSignDetected]);
+
+  // Throttled version of detection
+  const throttledDetect = useCallback(
+    throttle(detectHandSigns, DETECTION_INTERVAL),
+    [detectHandSigns, DETECTION_INTERVAL]
+  );
+
+  // Detection loop with proper frame management
+  const detectLoop = useCallback(async (video) => {
+    if (!isActive) return;
+    
+    await throttledDetect(video);
+    requestAnimationFrameRef.current = requestAnimationFrame(() => detectLoop(video));
+  }, [isActive, throttledDetect]);
 
   // Start/Stop detection effect
   useEffect(() => {
@@ -169,7 +268,7 @@ const SignLanguageRecognition = ({
       
       if (videoRef.current) {
         console.log('Starting hand detection with video:', videoRef.current);
-        detectHandSigns(videoRef.current);
+        detectLoop(videoRef.current);
       } else {
         console.error('No video reference available!');
       }
@@ -177,6 +276,10 @@ const SignLanguageRecognition = ({
       if (requestAnimationFrameRef.current) {
         cancelAnimationFrame(requestAnimationFrameRef.current);
       }
+      detectionCountRef.current = 0;
+      lastDetectedSignRef.current = '';
+      lastDetectionTimeRef.current = 0;
+      GESTURE_HISTORY.clear();
     }
 
     return () => {
@@ -184,7 +287,7 @@ const SignLanguageRecognition = ({
         cancelAnimationFrame(requestAnimationFrameRef.current);
       }
     };
-  }, [isActive, videoRef]);
+  }, [isActive, videoRef, detectLoop]);
 
   return (
     <>
@@ -225,7 +328,9 @@ const SignLanguageRecognition = ({
           e.target.style.transform = 'translateX(-50%)';
         }}
       >
-        {KawaiiGhost && <KawaiiGhost style={{ width: '20px', height: '20px' }} />}
+        {KawaiiGhost && typeof KawaiiGhost === 'function' && (
+          <KawaiiGhost style={{ width: '20px', height: '20px' }} />
+        )}
         {isActive ? 'Stop Detection' : 'Start Detection'}
       </button>
     </>

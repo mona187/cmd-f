@@ -1,20 +1,27 @@
-
 const API_KEY = 'AIzaSyBrVI_TAivVHZfvYfxZ5G1TGryrYVbvOGo'; // <--- Replace with your valid Cloud Translation API key
 
-// Language options with their display names
+// Language options with their display names and full language codes
 const LANGUAGES = {
-  'en-US': 'English',
-  'es-ES': 'Spanish',
-  'fr-FR': 'French',
-  'de-DE': 'German',
-  'zh-CN': 'Chinese',
-  'ja-JP': 'Japanese',
-  'ko-KR': 'Korean',
-  'ru-RU': 'Russian',
-  'it-IT': 'Italian',
-  'pt-BR': 'Portuguese',
-  'hi-IN': 'Hindi',
-  'ar-SA': 'Arabic'
+  'zh': { name: 'Chinese (Simplified)', code: 'zh-CN' },
+  'es': { name: 'Spanish', code: 'es-ES' },
+  'en': { name: 'English', code: 'en-US' },
+  'hi': { name: 'Hindi', code: 'hi-IN' },
+  'ar': { name: 'Arabic', code: 'ar-SA' },
+  'bn': { name: 'Bengali', code: 'bn-IN' },
+  'pt': { name: 'Portuguese', code: 'pt-BR' },
+  'ru': { name: 'Russian', code: 'ru-RU' },
+  'ja': { name: 'Japanese', code: 'ja-JP' },
+  'fa': { name: 'Persian', code: 'fa-IR' },
+  'de': { name: 'German', code: 'de-DE' },
+  'ko': { name: 'Korean', code: 'ko-KR' },
+  'fr': { name: 'French', code: 'fr-FR' },
+  'tr': { name: 'Turkish', code: 'tr-TR' },
+  'vi': { name: 'Vietnamese', code: 'vi-VN' },
+  'it': { name: 'Italian', code: 'it-IT' },
+  'th': { name: 'Thai', code: 'th-TH' },
+  'nl': { name: 'Dutch', code: 'nl-NL' },
+  'pl': { name: 'Polish', code: 'pl-PL' },
+  'uk': { name: 'Ukrainian', code: 'uk-UA' }
 };
 
 // Simple log helper
@@ -53,6 +60,67 @@ function injectStyles() {
       width: 300px;
       transition: all 0.3s ease;
     }
+
+    /* Language Selector Container */
+    .language-selector-container {
+      position: relative;
+      margin: 4px 0;
+    }
+
+    .language-search {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 4px;
+      box-sizing: border-box;
+    }
+
+    .language-search:focus {
+      outline: none;
+      border-color: #1a73e8;
+      box-shadow: 0 0 0 2px rgba(26,115,232,0.2);
+    }
+
+    .language-select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      font-size: 14px;
+      background: white;
+      max-height: 200px;
+      overflow-y: auto;
+      box-sizing: border-box;
+      z-index: 10000000;
+    }
+
+    .language-select option {
+      padding: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .language-select option:checked {
+      background: #e8f0fe;
+      color: #1a73e8;
+    }
+
+    .language-select option:hover {
+      background: #f8f9fa;
+    }
+
+    .language-group-title {
+      font-size: 12px;
+      color: #5f6368;
+      padding: 4px 8px;
+      background: #f8f9fa;
+      border-radius: 4px;
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+
     /* Minimizing Behavior */
     #meet-translator-container.minimized {
       width: 60px;
@@ -93,23 +161,6 @@ function injectStyles() {
     }
     #minimize-button:hover {
       background: #f1f3f4;
-    }
-
-    /* Language Selectors */
-    .language-select {
-      width: 100%;
-      padding: 8px;
-      margin: 4px 0;
-      border: 1px solid #dadce0;
-      border-radius: 4px;
-      font-size: 14px;
-      background: white;
-    }
-    .language-arrow {
-      text-align: center;
-      color: #5f6368;
-      margin: 4px 0;
-      font-size: 18px;
     }
 
     /* Button */
@@ -175,20 +226,62 @@ function injectStyles() {
 }
 
 function createLanguageSelector(id, defaultLang) {
+  const container = document.createElement('div');
+  container.className = 'language-selector-container';
+
+  // Create search input
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.className = 'language-search';
+  searchInput.placeholder = 'Search languages...';
+  container.appendChild(searchInput);
+
+  // Create select element
   const select = document.createElement('select');
   select.id = id;
   select.className = 'language-select';
-  
-  Object.entries(LANGUAGES).forEach(([code, name]) => {
-    const option = document.createElement('option');
-    option.value = code;
-    option.textContent = name;
-    if (code === defaultLang) {
-      option.selected = true;
-    }
-    select.appendChild(option);
+  select.size = 5; // Show 5 options at once
+
+  // Group languages by region
+  const languageGroups = {
+    'East Asian': ['zh', 'ja', 'ko'],
+    'South Asian': ['hi', 'bn'],
+    'Middle Eastern': ['ar', 'fa'],
+    'European': ['en', 'es', 'fr', 'de', 'it', 'nl', 'pl', 'uk', 'ru'],
+    'Other': ['pt', 'tr', 'vi', 'th']
+  };
+
+  // Create options grouped by region
+  Object.entries(languageGroups).forEach(([group, codes]) => {
+    const groupTitle = document.createElement('option');
+    groupTitle.disabled = true;
+    groupTitle.className = 'language-group-title';
+    groupTitle.textContent = group;
+    select.appendChild(groupTitle);
+
+    codes.forEach(code => {
+      const option = document.createElement('option');
+      option.value = code;
+      option.textContent = LANGUAGES[code].name;
+      if (code === defaultLang) {
+        option.selected = true;
+      }
+      select.appendChild(option);
+    });
   });
-  return select;
+
+  // Add search functionality
+  searchInput.addEventListener('input', (e) => {
+    const searchTerm = e.target.value.toLowerCase();
+    Array.from(select.options).forEach(option => {
+      if (option.disabled) return; // Skip group titles
+      const text = option.textContent.toLowerCase();
+      option.style.display = text.includes(searchTerm) ? '' : 'none';
+    });
+  });
+
+  container.appendChild(select);
+  return container;
 }
 
 function createTranslatorUI() {
@@ -205,7 +298,7 @@ function createTranslatorUI() {
   
   const minimizeBtn = document.createElement('button');
   minimizeBtn.id = 'minimize-button';
-  minimizeBtn.textContent = '—'; // Em dash or minus
+  minimizeBtn.textContent = '—';
   minimizeBtn.onclick = (e) => {
     e.stopPropagation();
     toggleMinimize();
@@ -218,12 +311,24 @@ function createTranslatorUI() {
   const bodyDiv = document.createElement('div');
   bodyDiv.className = 'translator-body';
 
-  // Language selectors
-  const sourceSelect = createLanguageSelector('sourceLanguage', 'en-US');
+  // Language selectors with labels
+  const sourceLabel = document.createElement('div');
+  sourceLabel.textContent = 'From:';
+  sourceLabel.style.fontSize = '12px';
+  sourceLabel.style.color = '#5f6368';
+  sourceLabel.style.marginBottom = '4px';
+
+  const targetLabel = document.createElement('div');
+  targetLabel.textContent = 'To:';
+  targetLabel.style.fontSize = '12px';
+  targetLabel.style.color = '#5f6368';
+  targetLabel.style.marginBottom = '4px';
+
+  const sourceSelect = createLanguageSelector('sourceLanguage', 'en');
   const arrow = document.createElement('div');
   arrow.className = 'language-arrow';
   arrow.textContent = '↓';
-  const targetSelect = createLanguageSelector('targetLanguage', 'es-ES');
+  const targetSelect = createLanguageSelector('targetLanguage', 'es');
 
   // Start/Stop button
   const startButton = document.createElement('button');
@@ -243,8 +348,10 @@ function createTranslatorUI() {
   translationDiv.className = 'translation-box';
 
   // Assemble Body
+  bodyDiv.appendChild(sourceLabel);
   bodyDiv.appendChild(sourceSelect);
   bodyDiv.appendChild(arrow);
+  bodyDiv.appendChild(targetLabel);
   bodyDiv.appendChild(targetSelect);
   bodyDiv.appendChild(startButton);
   bodyDiv.appendChild(status);
@@ -356,7 +463,7 @@ function startTranslationService() {
   recognition = new SpeechRecognition();
   recognition.continuous = true;
   recognition.interimResults = true;
-  recognition.lang = sourceLanguage;
+  recognition.lang = LANGUAGES[sourceLanguage].code;
 
   recognition.onstart = () => {
     log('Speech recognition started.');
@@ -386,8 +493,8 @@ function startTranslationService() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             q: transcript,
-            source: sourceLanguage.split('-')[0],
-            target: targetLanguage.split('-')[0]
+            source: sourceLanguage,
+            target: targetLanguage
           })
         }
       );
@@ -404,7 +511,7 @@ function startTranslationService() {
         translationDiv.textContent = translatedText;
 
         // Speak the translated text out loud (slower)
-        speakText(translatedText, targetLanguage);
+        speakText(translatedText, LANGUAGES[targetLanguage].code);
       }
     } catch (error) {
       log('Translation error:', error);
