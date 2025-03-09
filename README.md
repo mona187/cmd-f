@@ -3,7 +3,16 @@
 A real-time voice translation and sign language translation application with video chat capabilities that helps connect with people worldwide.
 
 
-## DevSecOps Features
+## Features
+- Speech Recognition: Uses the built-in browser API (Web Speech) to capture your spoken words.
+- Real-Time Translation: Calls a translation service (like Google Translate API) or a local mock translator to convert recognized text.
+- Sign Detection: Optional integration with TensorFlow handpose + Mediapipe to detect simple sign language gestures.
+- UI Panel: A draggable, resizable panel over your Google Meet window, with toggle buttons for starting/stopping translations.
+- Minimize: Collapses to a small icon so it doesn’t obstruct your video call.
+
+## Requirements
+-Chrome Browser (ideally version 88 or above), since it relies on Chrome’s built-in SpeechRecognition.
+-Microphone Access: The extension asks for mic permission to do speech recognition.
 
 ### Security Measures
 - **Pre-commit Hooks**: Automated checks for:
