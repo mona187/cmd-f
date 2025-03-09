@@ -2,6 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import io from 'socket.io-client';
 import SimplePeer from 'simple-peer';
 
+import ReactDOM from 'react-dom';
+
+
+
 // Update with your actual signaling server endpoint
 const SIGNAL_SERVER_URL = 'http://localhost:5050';
 
